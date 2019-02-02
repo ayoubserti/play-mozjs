@@ -21,6 +21,8 @@ endif()
 
 find_package(PkgConfig REQUIRED)
 
+link_directories("/usr/local/lib")
+
 #check MozJS module
 pkg_check_modules(JS REQUIRED js)
 
