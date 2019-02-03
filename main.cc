@@ -195,8 +195,14 @@ int main(int argc, const char *argv[])
                 JS_WrapObject(cx, &gWrapper);
                 JS::RootedValue v(cx, JS::ObjectValue(*gWrapper));
                 JS_SetProperty(cx, debugger, "g", v);
-                
-                testIndirectEval(dbgCx,debugger,str.c_str());
+                JS::CompileOptions co(cx);
+                co.setUTF8(true);
+                co.setFileAndLine("myDebugger", 1);
+                JS::RootedScript _script(cx);
+                JSScript
+                if ( JS::Compile(cx, co,str.c_str() ,str.size(), &_script) ) std::cout << "true" << std::endl;
+                JS_ExecuteScript(cx, _script);
+                //testIndirectEval(dbgCx,debugger,str.c_str());
             }
             }
             //
