@@ -15,6 +15,14 @@
 #include <string>
 #include <fstream>
 
+#include "websocket.h"
+
+using namespace std;
+
+
+
+
+
 /* The class of the global object. */
 static JSClass global_class = {
     "global",
@@ -97,7 +105,7 @@ static bool JS_common_fn_print( JSContext *context, unsigned int argc,
 }
 
 static bool JS_common_fn_readline( JSContext *context, unsigned int argc,
-                               JS::Value *vp ) {
+                                  JS::Value *vp ) {
     
     
     std::string line;
@@ -108,7 +116,7 @@ static bool JS_common_fn_readline( JSContext *context, unsigned int argc,
     JS::CallArgs args = CallArgsFromVp(argc, vp);
     
     JSString* jsline = JS_NewStringCopyN(context, line.c_str(), line.size());
-  
+    
     args.rval().setString(jsline);
     
     return true;
@@ -139,6 +147,7 @@ static std::string ReadFile( const std::string& filename){
 
 int main(int argc, const char *argv[])
 {
+    
     JS_Init();
     
     JSRuntime *rt = JS_NewRuntime(8L * 1024 * 1024);
@@ -176,38 +185,46 @@ int main(int argc, const char *argv[])
             
             {
                 
-            JS::RootedObject debugger(dbgCx, JS_NewGlobalObject(dbgCx, &JSR_DebuggerEngineGlobalGlass, nullptr, JS::FireOnNewGlobalHook,options));
-            if ( !debugger ) return 2;
-            {
-                JS_SetErrorReporter(rt, [](JSContext* cx, const char* message, JSErrorReport* report){
-                    std::cout << message << std::endl;
-                });
-                JSAutoCompartment a2(dbgCx, debugger);
-                JS_InitStandardClasses(dbgCx, debugger);
-                if ( !JS_DefineFunctions( dbgCx, debugger, &JS_TestGlobalFuntions[0] ) ) {
-                    throw std::runtime_error( "Cannot register global functions for test script." );
+                JS::RootedObject debugger(dbgCx, JS_NewGlobalObject(dbgCx, &JSR_DebuggerEngineGlobalGlass, nullptr, JS::FireOnNewGlobalHook,options));
+                if ( !debugger ) return 2;
+                {
+                    JS_SetErrorReporter(rt, [](JSContext* cx, const char* message, JSErrorReport* report){
+                        std::cout << message << std::endl;
+                    });
+                    JSAutoCompartment a2(dbgCx, debugger);
+                    JS_InitStandardClasses(dbgCx, debugger);
+                    if ( !JS_DefineFunctions( dbgCx, debugger, &JS_TestGlobalFuntions[0] ) ) {
+                        throw std::runtime_error( "Cannot register global functions for test script." );
+                    }
+                    if (!JS_DefineDebuggerObject(dbgCx, debugger))
+                    {
+                        return 1;
+                    }
+                    JS::RootedObject gWrapper(cx, global);
+                    JS_WrapObject(cx, &gWrapper);
+                    JS::RootedValue v(cx, JS::ObjectValue(*gWrapper));
+                    JS_SetProperty(cx, debugger, "g", v);
+                    {
+                        auto websocket = new WebSocketWrap();
+                        
+                        JSObject* websockwrap =  websocket->wrap(cx);
+                        JS::RootedObject gWrapper(cx, websockwrap);
+                        JS_WrapObject(cx, &gWrapper);
+                        JS::RootedValue v(cx, JS::ObjectValue(*gWrapper));
+                        JS_SetProperty(cx, debugger, "WebSocket", v);
+                    }
+                    JS::CompileOptions co(cx);
+                    co.setUTF8(true);
+                    co.setFileAndLine("myDebugger", 1);
+                    JS::RootedScript _script(cx);
+                    
+                    if ( JS::Compile(cx, co,str.c_str() ,str.size(), &_script) ) std::cout << "true" << std::endl;
+                    JS_ExecuteScript(cx, _script);
+                    //testIndirectEval(dbgCx,debugger,str.c_str());
                 }
-                if (!JS_DefineDebuggerObject(dbgCx, debugger))
-                 {
-                 return 1;
-                 }
-                JS::RootedObject gWrapper(cx, global);
-                JS_WrapObject(cx, &gWrapper);
-                JS::RootedValue v(cx, JS::ObjectValue(*gWrapper));
-                JS_SetProperty(cx, debugger, "g", v);
-                JS::CompileOptions co(cx);
-                co.setUTF8(true);
-                co.setFileAndLine("myDebugger", 1);
-                JS::RootedScript _script(cx);
-                JSScript
-                if ( JS::Compile(cx, co,str.c_str() ,str.size(), &_script) ) std::cout << "true" << std::endl;
-                JS_ExecuteScript(cx, _script);
-                //testIndirectEval(dbgCx,debugger,str.c_str());
             }
-            }
-            //
-            
-            testIndirectEval(cx,global,"var a = 'me'; debugger; print('aa')");
+           
+            testIndirectEval(cx,global," debugger; print('aa')");
             
         }
         
