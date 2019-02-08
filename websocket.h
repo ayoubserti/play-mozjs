@@ -29,6 +29,7 @@ class WebSocketWrap
     std::shared_ptr<WsServer::Connection>    connection_;
     
     static JSFunctionSpec JS_TestGlobalFuntions[];
+    
     static bool runwrap(JSContext *context, unsigned int argc,
                         JS::Value *vp );
     static bool pop_event_wrap(JSContext *context, unsigned int argc,
@@ -36,6 +37,9 @@ class WebSocketWrap
 
     static bool send_event_wrap(JSContext *context, unsigned int argc,
                                JS::Value *vp );
+    
+    void pop_event(JSContext* context, JS::MutableHandleValue vp);
+    void send_event(JSContext* context, JS::HandleValue vp);
 
     
 public:
@@ -43,8 +47,7 @@ public:
     WebSocketWrap();
     
     JSObject* wrap(JSContext* context);
-    void pop_event(JSContext* context, JS::MutableHandleValue vp);
-    void send_event(JSContext* context, JS::HandleValue vp);
+    
    
 };
 

@@ -48,15 +48,17 @@ JSFunctionSpec WebSocketWrap::JS_TestGlobalFuntions[] = {
 //WebSocketWrap
 
 WebSocketWrap::WebSocketWrap()
-:thd_(nullptr){
+:thd_(nullptr)
+,connection_(nullptr)
+{
     
-    server_.config.port = 8082;
+    server_.config.port = 8083;
     
     auto& debugger = server_.endpoint["^/debugger/?$"];
     debugger.on_message = [this](shared_ptr<WsServer::Connection> connection, shared_ptr<WsServer::InMessage> in_message) {
         auto out_message = in_message->string();
-        
-        connection_ = connection;
+        if ( (connection_.get() == nullptr))
+            connection_ = connection;
         
         EventMsg event_msg;
         event_msg.msg_ = out_message;
@@ -65,26 +67,6 @@ WebSocketWrap::WebSocketWrap()
         event_mutex_.unlock();
         
     };
-    
-
-    auto &echo = server_.endpoint["^/echo/?$"];
-    
-    echo.on_message = [](shared_ptr<WsServer::Connection> connection, shared_ptr<WsServer::InMessage> in_message) {
-        auto out_message = in_message->string();
-        
-        cout << "Server: Message received: \"" << out_message << "\" from " << connection.get() << endl;
-        
-        cout << "Server: Sending message \"" << out_message << "\" to " << connection.get() << endl;
-        
-        // connection->send is an asynchronous function
-        connection->send(out_message, [](const SimpleWeb::error_code &ec) {
-            if(ec) {
-                cout << "Server: Error sending message. " <<
-                // See http://www.boost.org/doc/libs/1_55_0/doc/html/boost_asio/reference.html, Error Codes for error code meanings
-                "Error: " << ec << ", error message: " << ec.message() << endl;
-            }
-        });
-    };
 }
 
 void WebSocketWrap::run()
@@ -92,7 +74,8 @@ void WebSocketWrap::run()
     thd_ = new thread([this]{
         this->server_.start();
     });
-    //this_thread::sleep_for(chrono::seconds(1));
+    //wait 1s for server to start
+    this_thread::sleep_for(chrono::seconds(1));
 }
 bool WebSocketWrap::runwrap(JSContext *context, unsigned int argc,
              JS::Value *vp )
@@ -125,7 +108,6 @@ bool WebSocketWrap::pop_event_wrap(JSContext *context, unsigned int argc,
         }
     }
     
-    
     return true;
 }
 bool WebSocketWrap::send_event_wrap(JSContext *context, unsigned int argc,
@@ -149,12 +131,12 @@ bool WebSocketWrap::send_event_wrap(JSContext *context, unsigned int argc,
 
 JSObject* WebSocketWrap::wrap(JSContext* context){
     
-    JSObject*   obj = JS_NewGlobalObject(context, &JSR_WebSocketGlobal, nullptr, JS::FireOnNewGlobalHook);
+    JSObject*   obj = JS_NewGlobalObject(context, &JSR_WebSocketGlobal, nullptr, JS::DontFireOnNewGlobalHook);
     JS::RootedObject rootedObj(context,obj);
     JSAutoCompartment a2(context, rootedObj);
     JS_InitStandardClasses(context, rootedObj);
     if ( !JS_DefineFunctions( context, rootedObj, &JS_TestGlobalFuntions[0] ) ) {
-        throw std::runtime_error( "Cannot register global functions for test script." );
+        throw std::runtime_error( "Cannot register global functions for WebSocket object." );
     }
     JS_SetPrivate(obj, this);
     return obj;
@@ -194,8 +176,13 @@ void WebSocketWrap::send_event(JSContext* context, JS::HandleValue vp)
        
        string msg=out;
        delete[] out;
-       
-       connection_->send(msg);
+       try{
+           connection_->send(msg);
+       }
+       catch(...)
+       {
+           //Maybe throw a js exception
+       }
        
    }
     

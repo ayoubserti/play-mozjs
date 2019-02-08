@@ -56,27 +56,6 @@ static JSClass JSR_DebuggerEngineGlobalGlass = {
     nullptr,
     JS_GlobalObjectTraceHook};
 
-bool exec(JSContext *cx, const char *bytes, const char *filename, int lineno)
-{
-    JS::RootedValue v(cx);
-    JS::CompileOptions opts(cx);
-    opts.setFileAndLine(filename, lineno);
-    return JS::Evaluate(cx, opts, bytes, strlen(bytes), &v);
-}
-
-bool testIndirectEval(JSContext *cx, JS::HandleObject scope, const char *code)
-{
-    {
-        JSAutoCompartment ae(cx, scope);
-        JSString *codestr = JS_NewStringCopyZ(cx, code);
-        
-        JS::RootedValue arg(cx, JS::StringValue(codestr));
-        JS::RootedValue v(cx);
-        JS_CallFunctionName(cx, scope, "eval", JS::HandleValueArray(arg), &v);
-    }
-    return true;
-}
-
 static bool JS_common_fn_print( JSContext *context, unsigned int argc,
                                JS::Value *vp ) {
     
@@ -127,110 +106,116 @@ static JSFunctionSpec JS_TestGlobalFuntions[] = {
     JS_FS_END
 };
 
-const char* script = nullptr;
-
-
 static std::string ReadFile( const std::string& filename){
+    
+    std::string str("");
     std::ifstream t(filename.c_str());
-    std::string str;
     
-    t.seekg(0, std::ios::end);
-    
-    str.resize(t.tellg());
-    t.seekg(0, std::ios::beg);
-    str.assign((std::istreambuf_iterator<char>(t)),
-               std::istreambuf_iterator<char>());
+    if ( t.is_open()){
+        
+        t.seekg(0, std::ios::end);
+        
+        str.resize(t.tellg());
+        t.seekg(0, std::ios::beg);
+        str.assign((std::istreambuf_iterator<char>(t)),
+                   std::istreambuf_iterator<char>());
+    }
     return str;
+}
+
+
+static bool  ExecuteFile( JSContext* ctx,const std::string& filename){
+    
+    std::string scriptStr = ReadFile(filename);
+    if(!scriptStr.empty()){
+        
+        JS::CompileOptions co(ctx);
+        co.setUTF8(true);
+        co.setFileAndLine(filename.c_str(), 1);
+        
+        JS::RootedScript _script(ctx);
+        
+        if ( JS::Compile(ctx, co,scriptStr.c_str() ,scriptStr.size(), &_script) ){
+            return JS_ExecuteScript(ctx, _script);
+        }
+    }
+    
+    return false;
 }
 
 
 
 int main(int argc, const char *argv[])
 {
-    
     JS_Init();
     
     JSRuntime *rt = JS_NewRuntime(8L * 1024 * 1024);
     if (!rt)
         return 1;
     
-    JSContext *cx = JS_NewContext(rt, 8192);
-    if (!cx)
+    JSContext *context = JS_NewContext(rt, 8192);
+    if (!context)
         return 1;
     
-    JSContext* dbgCx = cx; //JS_NewContext(rt, 8192);
-    std::string str =ReadFile("script.js");
-    
-    
-    { // Scope for our various stack objects (JSAutoRequest, RootedObject), so they all go
-        // out of scope before we JS_DestroyContext.
-        
-        //JSAutoRequest ar(cx); // In practice, you would want to exit this any
-        // time you're spinning the event loop
+    {
         JS::CompartmentOptions options;
-        
-        
-        JS::RootedObject global(cx, JS_NewGlobalObject(cx, &global_class, nullptr, JS::FireOnNewGlobalHook,options));
+        JS::RootedObject global(context, JS_NewGlobalObject(context, &global_class, nullptr, JS::FireOnNewGlobalHook,options));
         if (!global)
             return 1;
         {
-            {
-                JSAutoCompartment a1(cx, global);
-                JS_InitStandardClasses(cx, global);
+            
+                JSAutoCompartment a1(context, global);
+                JS_InitStandardClasses(context, global);
                 // Register global functions for test script.
-                if ( !JS_DefineFunctions( cx, global, &JS_TestGlobalFuntions[0] ) ) {
+                if ( !JS_DefineFunctions( context, global, &JS_TestGlobalFuntions[0] ) ) {
                     throw std::runtime_error( "Cannot register global functions for test script." );
                 }
-            }
             
             {
                 
-                JS::RootedObject debugger(dbgCx, JS_NewGlobalObject(dbgCx, &JSR_DebuggerEngineGlobalGlass, nullptr, JS::FireOnNewGlobalHook,options));
+                JS::RootedObject debugger(context, JS_NewGlobalObject(context, &JSR_DebuggerEngineGlobalGlass, nullptr, JS::DontFireOnNewGlobalHook,options));
                 if ( !debugger ) return 2;
                 {
-                    JS_SetErrorReporter(rt, [](JSContext* cx, const char* message, JSErrorReport* report){
+                    JS_SetErrorReporter(rt, [](JSContext* context, const char* message, JSErrorReport* report){
                         std::cout << message << std::endl;
                     });
-                    JSAutoCompartment a2(dbgCx, debugger);
-                    JS_InitStandardClasses(dbgCx, debugger);
-                    if ( !JS_DefineFunctions( dbgCx, debugger, &JS_TestGlobalFuntions[0] ) ) {
+                    
+                    JSAutoCompartment a2(context, debugger);
+                    JS_InitStandardClasses(context, debugger);
+                    if ( !JS_DefineFunctions( context, debugger, &JS_TestGlobalFuntions[0] ) ) {
                         throw std::runtime_error( "Cannot register global functions for test script." );
                     }
-                    if (!JS_DefineDebuggerObject(dbgCx, debugger))
+                    if (!JS_DefineDebuggerObject(context, debugger))
                     {
                         return 1;
                     }
-                    JS::RootedObject gWrapper(cx, global);
-                    JS_WrapObject(cx, &gWrapper);
-                    JS::RootedValue v(cx, JS::ObjectValue(*gWrapper));
-                    JS_SetProperty(cx, debugger, "g", v);
+                    
+                    
+                    JS::RootedObject gWrapper(context, global);
+                    JS_WrapObject(context, &gWrapper);
+                    JS::RootedValue v(context, JS::ObjectValue(*gWrapper));
+                    JS_SetProperty(context, debugger, "g", v);
                     {
                         auto websocket = new WebSocketWrap();
                         
-                        JSObject* websockwrap =  websocket->wrap(cx);
-                        JS::RootedObject gWrapper(cx, websockwrap);
-                        JS_WrapObject(cx, &gWrapper);
-                        JS::RootedValue v(cx, JS::ObjectValue(*gWrapper));
-                        JS_SetProperty(cx, debugger, "WebSocket", v);
+                        JSObject* websockwrap =  websocket->wrap(context);
+                        JS::RootedObject gWrapper(context, websockwrap);
+                        JS_WrapObject(context, &gWrapper);
+                        JS::RootedValue v(context, JS::ObjectValue(*gWrapper));
+                        JS_SetProperty(context, debugger, "WebSocket", v);
                     }
-                    JS::CompileOptions co(cx);
-                    co.setUTF8(true);
-                    co.setFileAndLine("myDebugger", 1);
-                    JS::RootedScript _script(cx);
+                    ExecuteFile(context,"debugger-script.js");
                     
-                    if ( JS::Compile(cx, co,str.c_str() ,str.size(), &_script) ) std::cout << "true" << std::endl;
-                    JS_ExecuteScript(cx, _script);
-                    //testIndirectEval(dbgCx,debugger,str.c_str());
                 }
             }
-           
-            testIndirectEval(cx,global," debugger; print('aa')");
+            ExecuteFile(context,"script.js");
             
         }
+   
         
     }
     
-    JS_DestroyContext(cx);
+    JS_DestroyContext(context);
     JS_DestroyRuntime(rt);
     JS_ShutDown();
     return 0;
