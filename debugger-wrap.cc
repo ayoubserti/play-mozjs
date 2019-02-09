@@ -77,7 +77,7 @@ void   JSDebuggerObject::setProperty(const char* field,  JS::HandleObject obj)
     JS_SetProperty(context_, object_, field, v);
 }
 
-void JSDebuggerObject::ExecuteFile(const std::string &filepath)
+void JSDebuggerObject::executeFile(const std::string &filepath)
 {
     auto comp = JS_EnterCompartment(context_, object_.get());
     if ( !Utils::ExecuteFile(context_, filepath))
