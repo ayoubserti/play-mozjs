@@ -58,7 +58,10 @@ WebSocketWrap::WebSocketWrap()
     debugger.on_message = [this](shared_ptr<WsServer::Connection> connection, shared_ptr<WsServer::InMessage> in_message) {
         auto out_message = in_message->string();
         if ( (connection_.get() == nullptr))
+        {
             connection_ = connection;
+            JS_RequestInterruptCallback(<#JSRuntime *rt#>)
+        }
         
         EventMsg event_msg;
         event_msg.msg_ = out_message;
@@ -193,5 +196,5 @@ void WebSocketWrap::send_event(JSContext* context, JS::HandleValue vp)
 WebSocketWrap::~WebSocketWrap()
 {
     server_.stop();
-    thd_->join();
+    thd_->join();  //wait websocket thread to terminate.
 }
