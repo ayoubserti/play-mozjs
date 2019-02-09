@@ -23,7 +23,7 @@ public:
 class WebSocketWrap
 {
     WsServer server_;
-    std::thread* thd_;
+    std::unique_ptr<std::thread> thd_;
     std::queue<EventMsg>    event_queue_;
     std::mutex              event_mutex_;
     std::shared_ptr<WsServer::Connection>    connection_;
@@ -47,6 +47,8 @@ public:
     WebSocketWrap();
     
     JSObject* wrap(JSContext* context);
+    
+    ~WebSocketWrap();
     
    
 };

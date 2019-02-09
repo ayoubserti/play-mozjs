@@ -71,9 +71,9 @@ WebSocketWrap::WebSocketWrap()
 
 void WebSocketWrap::run()
 {
-    thd_ = new thread([this]{
+    thd_.reset(new thread([this]{
         this->server_.start();
-    });
+    }));
     //wait 1s for server to start
     this_thread::sleep_for(chrono::seconds(1));
 }
@@ -187,4 +187,11 @@ void WebSocketWrap::send_event(JSContext* context, JS::HandleValue vp)
        
    }
     
+}
+
+
+WebSocketWrap::~WebSocketWrap()
+{
+    server_.stop();
+    thd_->join();
 }

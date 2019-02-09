@@ -21,7 +21,7 @@ public:
     
     void    setProperty(const char* field,  JS::HandleObject obj);
     
-    void    ExecuteFile(const std::string& filename);
+    void    executeFile(const std::string& filename);
     
 };
 
