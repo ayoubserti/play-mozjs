@@ -176,6 +176,7 @@ void WebSocketWrap::send_event(JSContext* context, JS::HandleValue vp)
        
        string msg=out;
        delete[] out;
+       if ( !connection_) return;
        try{
            connection_->send(msg);
        }

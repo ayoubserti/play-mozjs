@@ -29,7 +29,7 @@ link_directories("/usr/local/lib" "/usr/local/opt/openssl/lib")
 #check MozJS module
 pkg_check_modules(JS REQUIRED js)
 
-add_executable (play-mozjs "main.cc" "websocket.cc" "websocket.h")
+add_executable (play-mozjs "main.cc" "websocket.cc" "websocket.h" "debugger-wrap.h" "debugger-wrap.cc" "utils.h" "utils.cc")
 
 message ("${JS_LIBRARIES}")
 target_link_libraries(play-mozjs ${JS_LIBRARIES} ssl crypto) 
