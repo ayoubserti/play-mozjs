@@ -60,7 +60,7 @@ WebSocketWrap::WebSocketWrap()
         if ( (connection_.get() == nullptr))
         {
             connection_ = connection;
-            JS_RequestInterruptCallback(<#JSRuntime *rt#>)
+            //JS_RequestInterruptCallback(<#JSRuntime *rt#>)
         }
         
         EventMsg event_msg;
