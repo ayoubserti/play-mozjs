@@ -34,5 +34,18 @@ add_executable (play-mozjs "main.cc" "websocket.cc" "websocket.h" "debugger-wrap
 message ("${JS_LIBRARIES}")
 target_link_libraries(play-mozjs ${JS_LIBRARIES} ssl crypto) 
 target_include_directories(play-mozjs  PUBLIC ${JS_INCLUDE_DIRS} Simple-WebSocket-Server/  "/usr/local/opt/openssl/include" "/usr/local/opt/asio/include")
+
 add_dependencies(play-mozjs  simple-websocket-server)
+
+add_custom_command(
+        TARGET play-mozjs
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/debugger-script.js"
+                "${CMAKE_CURRENT_BINARY_DIR}/debugger-script.js"
+        
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/script.js"
+                "${CMAKE_CURRENT_BINARY_DIR}/script.js"        
+                )
+
 
