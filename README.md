@@ -1,8 +1,8 @@
-#About
+# About
 
 this is a demo application to demonstrate how can implemente a remote debugger for `SpiderMonkey` JS engine.
 
-#Dependencies
+# Dependencies
 
 It depends on:
 - mozjs-45
@@ -11,7 +11,7 @@ It depends on:
 - simple-websocket-server
 - pkgConfig
 
-#Build 
+# Build 
 
 The build process is managed with CMake.
 ```
@@ -21,7 +21,7 @@ $ cmake ..
 $ make
 ```
 
-#Cross-platform
+# Cross-platform
 
 this Project was tested in MacOS and Linux Ubuntu
 
