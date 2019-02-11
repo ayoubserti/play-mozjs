@@ -22,27 +22,28 @@ public:
 
 class WebSocketWrap
 {
-    WsServer server_;
-    std::unique_ptr<std::thread> thd_;
-    std::queue<EventMsg>    event_queue_;
-    std::mutex              event_mutex_;
+    WsServer                                 server_;
+    std::unique_ptr<std::thread>             thd_;
+    std::queue<EventMsg>                     event_queue_;
+    std::mutex                               event_mutex_;
     std::shared_ptr<WsServer::Connection>    connection_;
+    JSContext*                               context_;
     
     static JSFunctionSpec JS_TestGlobalFuntions[];
     
     static bool runwrap(JSContext *context, unsigned int argc,
                         JS::Value *vp );
     static bool pop_event_wrap(JSContext *context, unsigned int argc,
-                        JS::Value *vp );
-
-    static bool send_event_wrap(JSContext *context, unsigned int argc,
                                JS::Value *vp );
+    
+    static bool send_event_wrap(JSContext *context, unsigned int argc,
+                                JS::Value *vp );
     
     void pop_event(JSContext* context, JS::MutableHandleValue vp);
     void send_event(JSContext* context, JS::HandleValue vp);
-
     
 public:
+    
     void run();
     WebSocketWrap();
     
@@ -50,11 +51,7 @@ public:
     
     ~WebSocketWrap();
     
-   
+    
 };
-
-
-
-
 
 #endif

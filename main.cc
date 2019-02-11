@@ -5,8 +5,16 @@
 #include "websocket.h"
 #include "utils.h"
 #include "debugger-wrap.h"
+#include "scopeJs.h"
 
 using namespace std;
+
+//minimalist scope_guard
+struct scope_exit {
+    std::function<void()> f_;
+    explicit scope_exit(std::function<void()> f) noexcept : f_(std::move(f)) {}
+    ~scope_exit() { if (f_) f_(); }
+};
 
 /* The class of the global object. */
 static JSClass global_class = {
@@ -46,46 +54,109 @@ static bool initGlobal(JSContext* context, JS::HandleObject global)
 }
 
 
-int main(int argc, const char *argv[])
+
+MainJSSope*  MainJSSope::sInstance_ = nullptr;
+
+MainJSSope::MainJSSope()
+:websocket_(nullptr)
+,debugger_(nullptr)
+,runtime_(nullptr)
+,context_(nullptr)
+,global_()
+,interruptStat_(eUnknown)
 {
+    
+}
+
+
+MainJSSope& MainJSSope::Get()
+{
+    if ( sInstance_ == nullptr){
+        sInstance_ = new MainJSSope();
+        sInstance_->_Init();
+    }
+    return *sInstance_;
+}
+
+void MainJSSope::_Init(){
+    
     JS_Init();
+    runtime_ = JS_NewRuntime(8L * 1024 * 1024);
+    context_ = JS_NewContext(runtime_, 8192);
+    JS_SetInterruptCallback(runtime_,&MainJSSope::_interruptCallback);
     
-    auto websocket = new WebSocketWrap();
-    JSDebuggerObject* debuggerObj  = nullptr;
+    websocket_ = new WebSocketWrap();
     
-    JSRuntime *rt = JS_NewRuntime(8L * 1024 * 1024);
-    if (!rt)
-        return 1;
+    JS::CompartmentOptions options;
     
-    JSContext *context = JS_NewContext(rt, 8192);
-    
-    if(context!=nullptr)
+    global_ =  JS_NewGlobalObject(context_,&global_class,nullptr,JS::FireOnNewGlobalHook,options);
+    if ( initGlobal(context_, global_))
     {
-        JS::CompartmentOptions options;
+        JSAutoCompartment ac(context_,global_);
         
-        JS::RootedObject global(context, JS_NewGlobalObject(context,&global_class,nullptr,JS::FireOnNewGlobalHook,options));
-        if ( initGlobal(context, global))
-        {
-            JSAutoCompartment ac(context,global);
-            
-            debuggerObj = new JSDebuggerObject(context);
-            JSObject* websockwrap =  websocket->wrap(context);
-            debuggerObj->install(global);
-            JS::RootedObject gWrapper(context, websockwrap);
-            JS_WrapObject(context, &gWrapper);
-            JS::RootedValue v(context, JS::ObjectValue(*gWrapper));
-            debuggerObj->setProperty("WebSocket", gWrapper );
-            
-            debuggerObj->executeFile("debugger-script.js");
-            
-            Utils::ExecuteFile(context,"script.js");
-        }
         
+        debugger_ = new JSDebuggerObject(context_);
+        JSObject* websockwrap =  websocket_->wrap(context_);
+        debugger_->install(global_);
+        JS::RootedObject gWrapper(context_, websockwrap);
+        JS_WrapObject(context_, &gWrapper);
+        JS::RootedValue v(context_, JS::ObjectValue(*gWrapper));
+        debugger_->setProperty("WebSocket", gWrapper );
+        
+        debugger_->executeFile("debugger-script.js");
     }
     
-    delete debuggerObj;
-    JS_DestroyContext(context);
-    JS_DestroyRuntime(rt);
+}
+
+void MainJSSope::Start(){
+    
+    JSAutoCompartment ac(context_, global_);
+    Utils::ExecuteFile(context_,"script.js");
+}
+
+MainJSSope::~MainJSSope(){
+    delete  debugger_;
+    JS_DestroyContext(context_);
+    JS_DestroyRuntime(runtime_);
     JS_ShutDown();
+}
+
+bool MainJSSope::_interruptCallback(JSContext* ctx){
+    
+    
+    MainJSSope& jsScope = MainJSSope::Get();
+    JS_SetInterruptCallback(jsScope.runtime_, nullptr); // uninstall callback
+    
+    scope_exit guard([&](){
+        JS_SetInterruptCallback(jsScope.runtime_, _interruptCallback);});
+    
+    std::lock_guard<std::mutex> lock(jsScope.mutex_);
+    
+    if(jsScope.interruptStat_ == eForDebugging)
+    {
+        jsScope.debugger_->eval("test()");
+        jsScope.interruptStat_ = eUnknown;
+    }
+    
+    
+    return true;
+}
+
+
+void MainJSSope::Interrupt(InterruptionStat stat)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (stat== eForDebugging)
+        interruptStat_ = eForDebugging;
+    JS_RequestInterruptCallback(runtime_); //request an interrupt
+}
+
+
+
+
+int main(int argc, const char *argv[])
+{
+    MainJSSope& jsScope = MainJSSope::Get();
+    jsScope.Start();
     return 0;
 }

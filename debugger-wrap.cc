@@ -10,6 +10,7 @@
 #include "utils.h"
 
 
+
 JSFunctionSpec JSDebuggerObject::JS_GlobalObjectFunc[]={
     { "print",  {JSUtils::JS_common_fn_print , 0}, JSPROP_PERMANENT | JSPROP_ENUMERATE },
     { "readline",  {JSUtils::JS_common_fn_readline , 0}, JSPROP_PERMANENT | JSPROP_ENUMERATE },
@@ -22,19 +23,19 @@ JSDebuggerObject::JSDebuggerObject(JSContext* context)
 ,object_()
 ,compartment_(nullptr)
 ,class_({"JSDebuggerGlobal",
-        JSCLASS_GLOBAL_FLAGS,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        JS_GlobalObjectTraceHook})
+    JSCLASS_GLOBAL_FLAGS,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    JS_GlobalObjectTraceHook})
 {}
 
 
@@ -60,7 +61,7 @@ void    JSDebuggerObject::install(JS::HandleObject global)
         JS_WrapObject(context_, &gWrapper);
         JS::RootedValue v(context_, JS::ObjectValue(*gWrapper));
         JS_SetProperty(context_, debugger, "__globalObjectProxy", v);
-       
+        
     }
     
     JS_LeaveCompartment(context_, compartment_);
@@ -87,6 +88,18 @@ void JSDebuggerObject::executeFile(const std::string &filepath)
     JS_LeaveCompartment(context_, comp);
 }
 
+void JSDebuggerObject::eval(const std::string &src)
+{
+    auto comp = JS_EnterCompartment(context_, object_.get());
+    JSString* codestr = JS_NewStringCopyZ(context_, src.c_str());
+    
+    JS::RootedValue arg(context_, JS::StringValue(codestr));
+    JS::RootedValue v(context_);
+    JS_CallFunctionName(context_, object_, "eval", JS::HandleValueArray(arg), &v);
+    JS_LeaveCompartment(context_, comp);
+}
+
+
 JSDebuggerObject::~JSDebuggerObject()
 {
     if ( compartment_ !=nullptr)
@@ -96,4 +109,4 @@ JSDebuggerObject::~JSDebuggerObject()
     object_.reset(); //reset the persistan object
     
 }
-        
+

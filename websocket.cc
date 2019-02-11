@@ -7,6 +7,8 @@
 #include "mozilla/TypeTraits.h"
 
 #include "websocket.h"
+#include "debugger-wrap.h"
+#include "scopeJs.h"
 
 using namespace std;
 
@@ -50,6 +52,7 @@ JSFunctionSpec WebSocketWrap::JS_TestGlobalFuntions[] = {
 WebSocketWrap::WebSocketWrap()
 :thd_(nullptr)
 ,connection_(nullptr)
+, context_(nullptr)
 {
     
     server_.config.port = 8083;
@@ -59,15 +62,17 @@ WebSocketWrap::WebSocketWrap()
         auto out_message = in_message->string();
         if ( (connection_.get() == nullptr))
         {
+            //first connection, interrupt JS execution
             connection_ = connection;
-            //JS_RequestInterruptCallback(<#JSRuntime *rt#>)
+            MainJSSope& jsScope = MainJSSope::Get();
+            jsScope.Interrupt(eForDebugging);  //request an interruption
+            
         }
         
         EventMsg event_msg;
         event_msg.msg_ = out_message;
-        event_mutex_.lock();
+        std::lock_guard<std::mutex> lock(event_mutex_);
         event_queue_.push(event_msg);
-        event_mutex_.unlock();
         
     };
 }
@@ -80,8 +85,8 @@ void WebSocketWrap::run()
     //wait 1s for server to start
     this_thread::sleep_for(chrono::seconds(1));
 }
-bool WebSocketWrap::runwrap(JSContext *context, unsigned int argc,
-             JS::Value *vp )
+
+bool WebSocketWrap::runwrap(JSContext *context, unsigned int argc, JS::Value *vp )
 {
     JS::CallArgs args = CallArgsFromVp(argc, vp);
     JS::Value val = args.computeThis(context);
@@ -97,7 +102,7 @@ bool WebSocketWrap::runwrap(JSContext *context, unsigned int argc,
 }
 
 bool WebSocketWrap::pop_event_wrap(JSContext *context, unsigned int argc,
-                    JS::Value *vp ){
+                                   JS::Value *vp ){
     
     JS::CallArgs args = CallArgsFromVp(argc, vp);
     JS::Value val = args.computeThis(context);
@@ -114,7 +119,7 @@ bool WebSocketWrap::pop_event_wrap(JSContext *context, unsigned int argc,
     return true;
 }
 bool WebSocketWrap::send_event_wrap(JSContext *context, unsigned int argc,
-                                   JS::Value *vp ){
+                                    JS::Value *vp ){
     
     JS::CallArgs args = CallArgsFromVp(argc, vp);
     JS::Value val = args.computeThis(context);
@@ -142,14 +147,14 @@ JSObject* WebSocketWrap::wrap(JSContext* context){
         throw std::runtime_error( "Cannot register global functions for WebSocket object." );
     }
     JS_SetPrivate(obj, this);
+    context_ = context;
     return obj;
 }
 
 void WebSocketWrap::pop_event(JSContext* context, JS::MutableHandleValue vp)
 {
-    event_mutex_.lock();
+    std::lock_guard<std::mutex> lock(event_mutex_);
     if(event_queue_.empty()) {
-        event_mutex_.unlock();
         return;
     }
     EventMsg event = event_queue_.front();
@@ -159,36 +164,35 @@ void WebSocketWrap::pop_event(JSContext* context, JS::MutableHandleValue vp)
     vp.setString(jsstr);
     
     event_queue_.pop();
-    event_mutex_.unlock();
 }
 
 void WebSocketWrap::send_event(JSContext* context, JS::HandleValue vp)
 {
-   if (vp.isString())
-   {
-       
-       JSString* jsstr =  vp.get().toString();
-       if ( !jsstr) return;
-       JSFlatString* flat = JS_FlattenString(context, jsstr);
-       
-       size_t length = JS::GetDeflatedUTF8StringLength(flat);
-       if ( length == 0) return;
-       char* out = new char[length+1];
-       JS::DeflateStringToUTF8Buffer(flat, mozilla::RangedPtr<char>(out, length));
-       out[length] = '\0';
-       
-       string msg=out;
-       delete[] out;
-       if ( !connection_) return;
-       try{
-           connection_->send(msg);
-       }
-       catch(...)
-       {
-           //Maybe throw a js exception
-       }
-       
-   }
+    if (vp.isString())
+    {
+        
+        JSString* jsstr =  vp.get().toString();
+        if ( !jsstr) return;
+        JSFlatString* flat = JS_FlattenString(context, jsstr);
+        
+        size_t length = JS::GetDeflatedUTF8StringLength(flat);
+        if ( length == 0) return;
+        char* out = new char[length+1];
+        JS::DeflateStringToUTF8Buffer(flat, mozilla::RangedPtr<char>(out, length));
+        out[length] = '\0';
+        
+        string msg=out;
+        delete[] out;
+        if ( !connection_) return;
+        try{
+            connection_->send(msg);
+        }
+        catch(...)
+        {
+            //Maybe throw a js exception
+        }
+        
+    }
     
 }
 

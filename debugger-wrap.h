@@ -23,6 +23,8 @@ public:
     
     void    executeFile(const std::string& filename);
     
+    void    eval(const std::string& src);
+    
 };
 
 
