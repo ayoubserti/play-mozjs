@@ -53,7 +53,7 @@ void    JSDebuggerObject::install(JS::HandleObject global)
     compartment_ = JS_EnterCompartment(context_, debugger);
     JS_InitStandardClasses(context_, debugger);
     if ( !JS_DefineFunctions( context_, debugger, &JS_GlobalObjectFunc[0] ) ) {
-        throw std::runtime_error( "Cannot register global functions for test script." );
+        //throw std::runtime_error( "Cannot register global functions for test script." );
     }
     if ( JS_DefineDebuggerObject(context_, debugger)){
         
@@ -83,7 +83,7 @@ void JSDebuggerObject::executeFile(const std::string &filepath)
     auto comp = JS_EnterCompartment(context_, object_.get());
     if ( !Utils::ExecuteFile(context_, filepath))
     {
-        throw std::runtime_error("cannot execute debugger script.");
+        //throw std::exception("cannot execute debugger script.");
     }
     JS_LeaveCompartment(context_, comp);
 }
