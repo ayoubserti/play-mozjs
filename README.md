@@ -1,6 +1,6 @@
 # About
 
-this is a demo application to demonstrate how can implemente a remote debugger for `SpiderMonkey` JS engine.
+This is a demo application to demonstrate how can implemente a remote debugger for `SpiderMonkey` JS engine.
 
 # Dependencies
 
